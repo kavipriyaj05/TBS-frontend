@@ -1,7 +1,8 @@
 // ═══ FILE: src/utils/constants.js ═══
 // Shared constants for the entire frontend application
 
-export const API_BASE_URL = '/api';
+export const API_BASE_URL =
+  import.meta.env.VITE_API_BASE_URL || 'https://ticketmanagementsystem-o3gk.onrender.com/api';
 
 export const ROLES = {
   USER: 'USER',
