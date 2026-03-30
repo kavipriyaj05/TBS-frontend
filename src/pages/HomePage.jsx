@@ -1,5 +1,5 @@
 // ═══ FILE: src/pages/HomePage.jsx ═══
-// Homepage with hero banner, movie grid, search, and filters — Kavi
+// Homepage with hero banner, movie grid, search, and filters — connected to backend
 import { useState, useEffect, useCallback } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import movieApi from '../api/movieApi';
@@ -8,20 +8,6 @@ import MovieFilters from '../components/Movies/MovieFilters';
 import LoadingSpinner from '../components/shared/LoadingSpinner';
 import { HiOutlineFilm, HiOutlineTicket, HiOutlineLocationMarker } from 'react-icons/hi';
 import toast from 'react-hot-toast';
-
-// Mock data for demo until backend is connected
-const MOCK_MOVIES = [
-  { id: 1, title: 'Inception', genre: 'Sci-Fi', language: 'English', durationMin: 148, posterUrl: '', description: 'A thief who steals corporate secrets through dream-sharing technology.', releaseDate: '2025-07-16', isActive: true },
-  { id: 2, title: 'The Dark Knight', genre: 'Action', language: 'English', durationMin: 152, posterUrl: '', description: 'Batman faces the Joker, a criminal mastermind who wants to plunge Gotham into anarchy.', releaseDate: '2025-07-18', isActive: true },
-  { id: 3, title: 'Interstellar', genre: 'Sci-Fi', language: 'English', durationMin: 169, posterUrl: '', description: 'A team of explorers travel through a wormhole in space.', releaseDate: '2025-11-07', isActive: true },
-  { id: 4, title: 'Parasite', genre: 'Thriller', language: 'Hindi', durationMin: 132, posterUrl: '', description: 'Greed and class discrimination threaten the newly formed symbiotic relationship.', releaseDate: '2025-05-30', isActive: true },
-  { id: 5, title: 'Dangal', genre: 'Drama', language: 'Hindi', durationMin: 161, posterUrl: '', description: 'Former wrestler Mahavir Singh Phogat trains his daughters for wrestling.', releaseDate: '2025-12-23', isActive: true },
-  { id: 6, title: 'Bahubali', genre: 'Action', language: 'Telugu', durationMin: 159, posterUrl: '', description: 'An epic historical fiction film.', releaseDate: '2025-07-10', isActive: true },
-  { id: 7, title: 'Vikram', genre: 'Action', language: 'Tamil', durationMin: 174, posterUrl: '', description: 'A special agent investigates a series of murders.', releaseDate: '2025-06-03', isActive: true },
-  { id: 8, title: 'KGF Chapter 2', genre: 'Action', language: 'Kannada', durationMin: 168, posterUrl: '', description: 'Rocky takes over the gold mines and his enemies try to take him down.', releaseDate: '2025-04-14', isActive: true },
-  { id: 9, title: 'Dune: Part Two', genre: 'Sci-Fi', language: 'English', durationMin: 166, posterUrl: '', description: 'Paul Atreides unites with Chani and the Fremen.', releaseDate: '2025-03-01', isActive: true },
-  { id: 10, title: 'RRR', genre: 'Action', language: 'Telugu', durationMin: 187, posterUrl: '', description: 'A fictitious story about two legendary revolutionaries.', releaseDate: '2025-03-25', isActive: true },
-];
 
 const HomePage = () => {
   const [movies, setMovies] = useState([]);
@@ -33,40 +19,15 @@ const HomePage = () => {
   const fetchMovies = useCallback(async () => {
     setLoading(true);
     try {
-      // Try API first, fall back to mock data if backend is not running
       const params = {};
       if (filters.genre) params.genre = filters.genre;
       if (filters.language) params.language = filters.language;
 
-      let data;
-      try {
-        const response = searchQuery
-          ? await movieApi.searchMovies(searchQuery)
-          : await movieApi.getAllMovies(params);
-        data = response.data?.data || response.data || [];
-      } catch {
-        // Backend not available — use mock data
-        data = MOCK_MOVIES;
-      }
-
-      // Apply client-side filters on mock data
-      let filtered = Array.isArray(data) ? data : [];
-      if (filters.genre) {
-        filtered = filtered.filter((m) => m.genre?.toLowerCase() === filters.genre.toLowerCase());
-      }
-      if (filters.language) {
-        filtered = filtered.filter((m) => m.language?.toLowerCase() === filters.language.toLowerCase());
-      }
-      if (searchQuery) {
-        const q = searchQuery.toLowerCase();
-        filtered = filtered.filter(
-          (m) =>
-            m.title?.toLowerCase().includes(q) ||
-            m.genre?.toLowerCase().includes(q)
-        );
-      }
-
-      setMovies(filtered);
+      const response = searchQuery
+        ? await movieApi.searchMovies(searchQuery)
+        : await movieApi.getAllMovies(params);
+      const data = response.data?.data || response.data || [];
+      setMovies(Array.isArray(data) ? data : []);
     } catch (err) {
       toast.error('Failed to load movies');
       setMovies([]);
@@ -118,7 +79,7 @@ const HomePage = () => {
                   <HiOutlineFilm className="w-5 h-5 text-rose-400" />
                 </div>
                 <div className="text-left">
-                  <p className="text-white font-bold text-lg">500+</p>
+                  <p className="text-white font-bold text-lg">{movies.length || '—'}</p>
                   <p className="text-gray-500 text-xs">Movies</p>
                 </div>
               </div>

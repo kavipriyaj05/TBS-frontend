@@ -2,8 +2,11 @@
 // Individual movie card with hover effects — Kavi
 import { Link } from 'react-router-dom';
 import { HiOutlineClock, HiOutlineStar } from 'react-icons/hi';
+import { getMoviePoster } from '../../utils/moviePosters';
 
 const MovieCard = ({ movie }) => {
+  const posterSrc = getMoviePoster(movie);
+
   // Fallback poster gradient when no image is available
   const fallbackGradient = `linear-gradient(135deg, 
     hsl(${(movie.id * 47) % 360}, 70%, 25%), 
@@ -18,9 +21,9 @@ const MovieCard = ({ movie }) => {
       <div className="relative overflow-hidden rounded-xl bg-gray-900 border border-gray-800/50 hover:border-gray-700/50 transition-all duration-300 hover:shadow-2xl hover:shadow-rose-500/10 hover:-translate-y-1">
         {/* Poster */}
         <div className="relative aspect-[2/3] overflow-hidden">
-          {movie.posterUrl ? (
+          {posterSrc ? (
             <img
-              src={movie.posterUrl}
+              src={posterSrc}
               alt={movie.title}
               className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
               loading="lazy"

@@ -1,5 +1,5 @@
 // ═══ FILE: src/pages/SeatSelectionPage.jsx ═══
-// Seat selection page with interactive seat map — Jeyanth
+// Seat selection page with interactive seat map — connected to backend
 import { useState, useEffect, useMemo } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
 import { useSelector, useDispatch } from 'react-redux';
@@ -16,46 +16,6 @@ import {
 } from 'react-icons/hi';
 import toast from 'react-hot-toast';
 
-// ── Mock data for demo ──
-const MOCK_SHOW = {
-  id: 1,
-  showTime: '2026-04-01T14:00:00',
-  price: 200.0,
-  status: 'SCHEDULED',
-  movie: { id: 1, title: 'Inception', genre: 'Sci-Fi', language: 'English', durationMin: 148 },
-  screen: {
-    id: 1,
-    screenName: 'Screen 2',
-    totalSeats: 80,
-    theatre: { id: 1, name: 'PVR Cinemas', city: 'Chennai' },
-  },
-};
-
-const generateMockSeats = () => {
-  const rows = ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'J'];
-  const seats = [];
-  let id = 1;
-  rows.forEach((row) => {
-    const seatsPerRow = row <= 'B' ? 12 : row <= 'E' ? 14 : row <= 'H' ? 16 : 14;
-    const type =
-      row <= 'B' ? SEAT_TYPES.RECLINER : row <= 'E' ? SEAT_TYPES.PREMIUM : SEAT_TYPES.STANDARD;
-    const price = type === SEAT_TYPES.RECLINER ? 450 : type === SEAT_TYPES.PREMIUM ? 300 : 200;
-    for (let i = 1; i <= seatsPerRow; i++) {
-      const isBooked = Math.random() < 0.25; // 25% booked
-      seats.push({
-        id: id++,
-        row,
-        seatNumber: i,
-        seatLabel: `${row}${i}`,
-        type,
-        price,
-        status: isBooked ? 'CONFIRMED' : 'AVAILABLE',
-      });
-    }
-  });
-  return seats;
-};
-
 const SEAT_COLORS = {
   AVAILABLE: {
     STANDARD: 'bg-gray-700/50 border-gray-600 hover:bg-emerald-500/30 hover:border-emerald-400',
@@ -64,6 +24,29 @@ const SEAT_COLORS = {
   },
   SELECTED: 'bg-emerald-500 border-emerald-400 text-white shadow-lg shadow-emerald-500/30',
   BOOKED: 'bg-gray-800/80 border-gray-700/30 text-gray-700 cursor-not-allowed',
+};
+
+// Parse seat label like "A1" into row "A" and number 1
+const parseSeatLabel = (seatNumber) => {
+  const match = seatNumber?.match(/^([A-Z]+)(\d+)$/i);
+  if (match) return { row: match[1].toUpperCase(), num: parseInt(match[2], 10) };
+  return { row: '?', num: 0 };
+};
+
+// Map backend SeatResponse to display format
+const mapSeat = (seat) => {
+  const { row, num } = parseSeatLabel(seat.seatNumber);
+  const type = (seat.seatType || 'STANDARD').toUpperCase();
+  const price = type === 'RECLINER' ? 450 : type === 'PREMIUM' ? 300 : 200;
+  return {
+    id: seat.id,
+    row,
+    seatNumber: num,
+    seatLabel: seat.seatNumber,
+    type,
+    price,
+    status: seat.isAvailable ? 'AVAILABLE' : 'CONFIRMED',
+  };
 };
 
 const SeatSelectionPage = () => {
@@ -82,15 +65,11 @@ const SeatSelectionPage = () => {
     const fetchShow = async () => {
       setLoading(true);
       try {
-        try {
-          const showRes = await axiosInstance.get(`/shows/${id}`);
-          setShow(showRes.data?.data || showRes.data);
-          const seatsRes = await axiosInstance.get(`/shows/${id}/seats`);
-          setSeats(seatsRes.data?.data || seatsRes.data || []);
-        } catch {
-          setShow({ ...MOCK_SHOW, id: Number(id) });
-          setSeats(generateMockSeats());
-        }
+        const showRes = await axiosInstance.get(`/shows/${id}`);
+        setShow(showRes.data?.data || showRes.data);
+        const seatsRes = await axiosInstance.get(`/shows/${id}/seats`);
+        const rawSeats = seatsRes.data?.data || seatsRes.data || [];
+        setSeats(rawSeats.map(mapSeat));
       } catch {
         toast.error('Failed to load show details');
       } finally {
@@ -106,7 +85,6 @@ const SeatSelectionPage = () => {
       if (!grouped[seat.row]) grouped[seat.row] = [];
       grouped[seat.row].push(seat);
     });
-    // Sort seats within each row
     Object.values(grouped).forEach((rowSeats) =>
       rowSeats.sort((a, b) => a.seatNumber - b.seatNumber)
     );
@@ -144,24 +122,12 @@ const SeatSelectionPage = () => {
         })
       ).unwrap();
 
-      const bookingId = result.data?.id || result.id || 'mock-1';
+      const bookingData = result.data || result;
+      const bookingId = bookingData.id;
       toast.success('Booking created! Proceed to payment.');
       navigate(`/bookings/${bookingId}/confirm`);
     } catch (err) {
-      // Mock flow — navigate to confirm page anyway for demo
-      toast.success('Booking created! Proceed to payment.');
-      navigate(`/bookings/mock-1/confirm`, {
-        state: {
-          mockBooking: {
-            id: 'mock-1',
-            show,
-            seats: selectedSeats,
-            totalPrice,
-            status: 'PENDING',
-            createdAt: new Date().toISOString(),
-          },
-        },
-      });
+      toast.error(err || 'Booking failed. Please try again.');
     }
   };
 
@@ -201,7 +167,7 @@ const SeatSelectionPage = () => {
       <div className="bg-gray-900/60 border-b border-gray-800/50">
         <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-4">
           <Link
-            to={`/movies/${show.movie?.id || 1}`}
+            to={`/movies/${show.movieId || 1}`}
             className="inline-flex items-center gap-2 text-gray-400 hover:text-white text-sm mb-3 transition-colors group"
           >
             <HiArrowLeft className="w-4 h-4 group-hover:-translate-x-1 transition-transform" />
@@ -211,12 +177,12 @@ const SeatSelectionPage = () => {
           <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
             <div>
               <h1 className="text-xl sm:text-2xl font-bold text-white">
-                {show.movie?.title || 'Movie'}
+                {show.movieTitle || 'Movie'}
               </h1>
               <div className="flex flex-wrap items-center gap-3 mt-1.5 text-sm text-gray-400">
                 <span className="flex items-center gap-1">
                   <HiOutlineLocationMarker className="w-3.5 h-3.5 text-gray-500" />
-                  {show.screen?.theatre?.name} — {show.screen?.screenName}
+                  {show.theatreName} — {show.screenName}
                 </span>
                 <span className="flex items-center gap-1">
                   <HiOutlineClock className="w-3.5 h-3.5 text-gray-500" />
@@ -224,11 +190,6 @@ const SeatSelectionPage = () => {
                 </span>
               </div>
             </div>
-            {show.movie?.language && (
-              <span className="self-start px-3 py-1 bg-purple-500/10 border border-purple-500/20 rounded-full text-purple-400 text-xs font-medium">
-                {show.movie.language}
-              </span>
-            )}
           </div>
         </div>
       </div>
@@ -273,80 +234,87 @@ const SeatSelectionPage = () => {
             </div>
 
             {/* Seat Grid */}
-            <div className="overflow-x-auto pb-4">
-              <div className="min-w-[500px] space-y-1.5">
-                {rows.map((row) => {
-                  const rowSeats = seatsByRow[row];
-                  const maxSeats = Math.max(...rows.map((r) => seatsByRow[r]?.length || 0));
-                  const padding = Math.floor((maxSeats - rowSeats.length) / 2);
-
-                  return (
-                    <div key={row} className="flex items-center gap-1 justify-center">
-                      {/* Row label */}
-                      <span className="w-6 text-right text-gray-500 text-xs font-medium flex-shrink-0">
-                        {row}
-                      </span>
-
-                      <div className="flex gap-1 items-center">
-                        {/* Left padding */}
-                        {Array.from({ length: padding }).map((_, i) => (
-                          <div key={`lp-${i}`} className="w-7 h-7 sm:w-8 sm:h-8" />
-                        ))}
-
-                        {rowSeats.map((seat, idx) => {
-                          const isSelected = selectedSeats.some((s) => s.id === seat.id);
-                          const isBooked =
-                            seat.status === 'CONFIRMED' || seat.status === 'LOCKED';
-                          const gapAfter =
-                            idx === Math.floor(rowSeats.length / 2) - 1;
-
-                          let colorClass;
-                          if (isSelected) {
-                            colorClass = SEAT_COLORS.SELECTED;
-                          } else if (isBooked) {
-                            colorClass = SEAT_COLORS.BOOKED;
-                          } else {
-                            colorClass =
-                              SEAT_COLORS.AVAILABLE[seat.type] ||
-                              SEAT_COLORS.AVAILABLE.STANDARD;
-                          }
-
-                          return (
-                            <button
-                              key={seat.id}
-                              id={`seat-${seat.seatLabel}`}
-                              onClick={() => handleSeatClick(seat)}
-                              disabled={isBooked}
-                              title={`${seat.seatLabel} — ₹${seat.price} (${seat.type})`}
-                              className={`w-7 h-7 sm:w-8 sm:h-8 rounded-md border text-[10px] font-medium transition-all duration-200 cursor-pointer ${colorClass} ${
-                                gapAfter ? 'mr-4' : ''
-                              } ${
-                                isSelected
-                                  ? 'scale-110'
-                                  : isBooked
-                                  ? ''
-                                  : 'hover:scale-105 active:scale-95'
-                              }`}
-                            >
-                              {seat.seatNumber}
-                            </button>
-                          );
-                        })}
-
-                        {/* Right padding */}
-                        {Array.from({ length: padding }).map((_, i) => (
-                          <div key={`rp-${i}`} className="w-7 h-7 sm:w-8 sm:h-8" />
-                        ))}
-                      </div>
-
-                      <span className="w-6 text-left text-gray-500 text-xs font-medium flex-shrink-0">
-                        {row}
-                      </span>
-                    </div>
-                  );
-                })}
+            {seats.length === 0 ? (
+              <div className="text-center py-12">
+                <HiOutlineTicket className="w-12 h-12 text-gray-700 mx-auto mb-3" />
+                <p className="text-gray-400 font-medium">No seats available for this show</p>
               </div>
-            </div>
+            ) : (
+              <div className="overflow-x-auto pb-4">
+                <div className="min-w-[500px] space-y-1.5">
+                  {rows.map((row) => {
+                    const rowSeats = seatsByRow[row];
+                    const maxSeats = Math.max(...rows.map((r) => seatsByRow[r]?.length || 0));
+                    const padding = Math.floor((maxSeats - rowSeats.length) / 2);
+
+                    return (
+                      <div key={row} className="flex items-center gap-1 justify-center">
+                        {/* Row label */}
+                        <span className="w-6 text-right text-gray-500 text-xs font-medium flex-shrink-0">
+                          {row}
+                        </span>
+
+                        <div className="flex gap-1 items-center">
+                          {/* Left padding */}
+                          {Array.from({ length: padding }).map((_, i) => (
+                            <div key={`lp-${i}`} className="w-7 h-7 sm:w-8 sm:h-8" />
+                          ))}
+
+                          {rowSeats.map((seat, idx) => {
+                            const isSelected = selectedSeats.some((s) => s.id === seat.id);
+                            const isBooked =
+                              seat.status === 'CONFIRMED' || seat.status === 'LOCKED';
+                            const gapAfter =
+                              idx === Math.floor(rowSeats.length / 2) - 1;
+
+                            let colorClass;
+                            if (isSelected) {
+                              colorClass = SEAT_COLORS.SELECTED;
+                            } else if (isBooked) {
+                              colorClass = SEAT_COLORS.BOOKED;
+                            } else {
+                              colorClass =
+                                SEAT_COLORS.AVAILABLE[seat.type] ||
+                                SEAT_COLORS.AVAILABLE.STANDARD;
+                            }
+
+                            return (
+                              <button
+                                key={seat.id}
+                                id={`seat-${seat.seatLabel}`}
+                                onClick={() => handleSeatClick(seat)}
+                                disabled={isBooked}
+                                title={`${seat.seatLabel} — ₹${seat.price} (${seat.type})`}
+                                className={`w-7 h-7 sm:w-8 sm:h-8 rounded-md border text-[10px] font-medium transition-all duration-200 cursor-pointer ${colorClass} ${
+                                  gapAfter ? 'mr-4' : ''
+                                } ${
+                                  isSelected
+                                    ? 'scale-110'
+                                    : isBooked
+                                    ? ''
+                                    : 'hover:scale-105 active:scale-95'
+                                }`}
+                              >
+                                {seat.seatNumber}
+                              </button>
+                            );
+                          })}
+
+                          {/* Right padding */}
+                          {Array.from({ length: padding }).map((_, i) => (
+                            <div key={`rp-${i}`} className="w-7 h-7 sm:w-8 sm:h-8" />
+                          ))}
+                        </div>
+
+                        <span className="w-6 text-left text-gray-500 text-xs font-medium flex-shrink-0">
+                          {row}
+                        </span>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
 
             {/* Pricing tiers */}
             <div className="flex flex-wrap justify-center gap-6 mt-8 pt-6 border-t border-gray-800/50">

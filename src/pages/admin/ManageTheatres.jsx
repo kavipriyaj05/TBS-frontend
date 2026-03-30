@@ -24,49 +24,6 @@ const MOCK_THEATRES = [
     screens: [
       { id: 1, screenName: 'Screen 1', totalSeats: 120 },
       { id: 2, screenName: 'Screen 2', totalSeats: 80 },
-      { id: 3, screenName: 'Screen 3', totalSeats: 100 },
-      { id: 4, screenName: 'IMAX', totalSeats: 200 },
-      { id: 5, screenName: 'Gold Class', totalSeats: 40 },
-    ],
-  },
-  {
-    id: 2,
-    name: 'INOX Megaplex',
-    city: 'Chennai',
-    address: '456 ECR Road, Neelankarai',
-    totalScreens: 4,
-    screens: [
-      { id: 6, screenName: 'IMAX', totalSeats: 250 },
-      { id: 7, screenName: 'Screen 1', totalSeats: 150 },
-      { id: 8, screenName: 'Screen 2', totalSeats: 100 },
-      { id: 9, screenName: 'Screen 3', totalSeats: 80 },
-    ],
-  },
-  {
-    id: 3,
-    name: 'Cinepolis',
-    city: 'Bangalore',
-    address: '789 MG Road, Brigade Road',
-    totalScreens: 3,
-    screens: [
-      { id: 10, screenName: 'Screen 1', totalSeats: 120 },
-      { id: 11, screenName: 'Screen 2', totalSeats: 90 },
-      { id: 12, screenName: 'Dolby Atmos', totalSeats: 180 },
-    ],
-  },
-  {
-    id: 4,
-    name: 'SPI Cinemas',
-    city: 'Chennai',
-    address: '10 Chetpet, Nungambakkam',
-    totalScreens: 6,
-    screens: [
-      { id: 13, screenName: 'S1', totalSeats: 100 },
-      { id: 14, screenName: 'S2', totalSeats: 100 },
-      { id: 15, screenName: 'S3', totalSeats: 80 },
-      { id: 16, screenName: 'S4', totalSeats: 80 },
-      { id: 17, screenName: 'Luxe', totalSeats: 50 },
-      { id: 18, screenName: 'IMAX', totalSeats: 300 },
     ],
   },
 ];
@@ -122,11 +79,11 @@ const ManageTheatres = () => {
     setSaving(true);
     try {
       if (editingTheatre) {
-        try { await adminApi.updateTheatre(editingTheatre.id, theatreForm); } catch {}
+        // No backend update endpoint — apply locally
         setTheatres((prev) =>
           prev.map((t) => (t.id === editingTheatre.id ? { ...t, ...theatreForm } : t))
         );
-        toast.success('Theatre updated');
+        toast.success('Theatre updated (local)');
       } else {
         try {
           const res = await adminApi.createTheatre(theatreForm);
@@ -149,10 +106,10 @@ const ManageTheatres = () => {
   };
 
   const handleDeleteTheatre = async (id) => {
-    if (!window.confirm('Delete this theatre and all its screens?')) return;
-    try { await adminApi.deleteTheatre(id); } catch {}
+    if (!window.confirm('Delete this theatre? (local only — no backend delete endpoint)')) return;
+    // No backend delete endpoint — just remove locally
     setTheatres((prev) => prev.filter((t) => t.id !== id));
-    toast.success('Theatre deleted');
+    toast.success('Theatre removed');
   };
 
   // ── Screen CRUD ──
@@ -166,8 +123,13 @@ const ManageTheatres = () => {
     e.preventDefault();
     setSaving(true);
     try {
+      // Backend expects POST /admin/screens with { theatreId, screenName, totalSeats }
       try {
-        await adminApi.createScreen(selectedTheatreId, screenForm);
+        await adminApi.createScreen({
+          theatreId: selectedTheatreId,
+          screenName: screenForm.screenName,
+          totalSeats: Number(screenForm.totalSeats),
+        });
       } catch {}
       setTheatres((prev) =>
         prev.map((t) => {

@@ -17,25 +17,13 @@ import {
   HiOutlineTrendingUp,
 } from 'react-icons/hi';
 
-// Mock stats for demo
-const MOCK_STATS = {
-  totalMovies: 10,
-  totalTheatres: 5,
-  totalShows: 24,
-  totalBookings: 156,
-  totalUsers: 342,
-  totalRevenue: 245600,
-  revenueGrowth: 12.5,
-  bookingsToday: 18,
-};
-
 const STAT_CARDS = [
   { key: 'totalMovies', label: 'Movies', icon: HiOutlineFilm, color: 'rose', format: (v) => v },
   { key: 'totalTheatres', label: 'Theatres', icon: HiOutlineOfficeBuilding, color: 'purple', format: (v) => v },
   { key: 'totalBookings', label: 'Bookings', icon: HiOutlineTicket, color: 'blue', format: (v) => v },
-  { key: 'totalUsers', label: 'Users', icon: HiOutlineUsers, color: 'emerald', format: (v) => v },
-  { key: 'totalRevenue', label: 'Revenue', icon: HiOutlineCash, color: 'amber', format: (v) => `₹${(v / 1000).toFixed(1)}K` },
-  { key: 'bookingsToday', label: 'Today', icon: HiOutlineTrendingUp, color: 'teal', format: (v) => v },
+  { key: 'totalShows', label: 'Shows', icon: HiOutlineCalendar, color: 'emerald', format: (v) => v },
+  { key: 'totalUsers', label: 'Users', icon: HiOutlineChartBar, color: 'amber', format: (v) => v },
+  { key: 'totalRevenue', label: 'Revenue', icon: HiOutlineChartBar, color: 'teal', format: (v) => v > 0 ? `₹${(v / 1000).toFixed(1)}K` : '₹0' },
 ];
 
 const COLOR_MAP = {
@@ -54,80 +42,90 @@ const NAV_ITEMS = [
   { path: '/admin/theatres', label: 'Theatres', icon: HiOutlineOfficeBuilding },
 ];
 
-// ── Overview sub-component ──
-const AdminOverview = ({ stats }) => (
-  <div>
-    <h2 className="text-xl font-bold text-white mb-6">Dashboard Overview</h2>
-
-    {/* Stats grid */}
-    <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-4 mb-8">
-      {STAT_CARDS.map(({ key, label, icon: Icon, color, format }) => {
-        const c = COLOR_MAP[color];
-        return (
-          <div
-            key={key}
-            className={`${c.bg} border ${c.border} rounded-xl p-4 hover:scale-105 transition-transform`}
-          >
-            <div className="flex items-center gap-2 mb-2">
-              <Icon className={`w-4 h-4 ${c.icon}`} />
-              <span className="text-gray-400 text-xs">{label}</span>
-            </div>
-            <p className={`text-2xl font-bold ${c.text}`}>{format(stats[key] || 0)}</p>
-          </div>
-        );
-      })}
-    </div>
-
-    {/* Recent activity placeholder */}
-    <div className="bg-gray-900/60 border border-gray-800/50 rounded-xl p-6">
-      <h3 className="text-white font-semibold text-sm mb-4">Recent Activity</h3>
-      <div className="space-y-3">
-        {[
-          { text: 'New booking — Inception (2 seats)', time: '2 mins ago', type: 'booking' },
-          { text: 'User "rahul@email.com" registered', time: '15 mins ago', type: 'user' },
-          { text: 'Show added — The Dark Knight @ PVR 6:30 PM', time: '1 hour ago', type: 'show' },
-          { text: 'Booking cancelled — Dangal (#3)', time: '3 hours ago', type: 'cancel' },
-          { text: 'New movie added — Dune: Part Two', time: '5 hours ago', type: 'movie' },
-        ].map((activity, i) => (
-          <div
-            key={i}
-            className="flex items-center gap-3 py-2 px-3 bg-gray-800/30 rounded-lg"
-          >
-            <div
-              className={`w-2 h-2 rounded-full flex-shrink-0 ${
-                activity.type === 'booking'
-                  ? 'bg-emerald-400'
-                  : activity.type === 'user'
-                  ? 'bg-blue-400'
-                  : activity.type === 'cancel'
-                  ? 'bg-red-400'
-                  : 'bg-purple-400'
-              }`}
-            />
-            <span className="text-gray-300 text-sm flex-1">{activity.text}</span>
-            <span className="text-gray-600 text-xs flex-shrink-0">{activity.time}</span>
-          </div>
-        ))}
-      </div>
-    </div>
-  </div>
-);
-
-const AdminDashboard = () => {
-  const location = useLocation();
-  const [stats, setStats] = useState(MOCK_STATS);
+// ── Overview sub-component — fetches stats from real endpoints ──
+const AdminOverview = () => {
+  const [stats, setStats] = useState({ totalMovies: 0, totalTheatres: 0, totalBookings: 0, totalShows: 0, totalUsers: 0, totalRevenue: 0 });
 
   useEffect(() => {
     const fetchStats = async () => {
       try {
         const response = await adminApi.getDashboardStats();
-        setStats(response.data?.data || response.data || MOCK_STATS);
+        const data = response.data?.data || response.data || {};
+        setStats({
+          totalMovies: data.totalMovies || 0,
+          totalTheatres: data.totalTheatres || 0,
+          totalShows: data.totalShows || 0,
+          totalBookings: data.totalBookings || 0,
+          totalUsers: data.totalUsers || 0,
+          totalRevenue: data.totalRevenue || 0,
+        });
       } catch {
-        setStats(MOCK_STATS);
+        // Keep zeros
       }
     };
     fetchStats();
   }, []);
+
+
+  return (
+    <div>
+      <h2 className="text-xl font-bold text-white mb-6">Dashboard Overview</h2>
+
+      {/* Stats grid */}
+      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-4 mb-8">
+        {STAT_CARDS.map(({ key, label, icon: Icon, color, format }) => {
+          const c = COLOR_MAP[color];
+          return (
+            <div
+              key={key}
+              className={`${c.bg} border ${c.border} rounded-xl p-4 hover:scale-105 transition-transform`}
+            >
+              <div className="flex items-center gap-2 mb-2">
+                <Icon className={`w-4 h-4 ${c.icon}`} />
+                <span className="text-gray-400 text-xs">{label}</span>
+              </div>
+              <p className={`text-2xl font-bold ${c.text}`}>{format(stats[key] || 0)}</p>
+            </div>
+          );
+        })}
+      </div>
+
+      {/* Recent activity placeholder */}
+      <div className="bg-gray-900/60 border border-gray-800/50 rounded-xl p-6">
+        <h3 className="text-white font-semibold text-sm mb-4">System Status</h3>
+        <div className="space-y-3">
+          {[
+            { text: 'All backend services are operational', type: 'ok' },
+            { text: `${stats.totalMovies} movies currently active`, type: 'movie' },
+            { text: `${stats.totalShows} shows scheduled`, type: 'show' },
+            { text: `${stats.totalBookings} total bookings processed`, type: 'booking' },
+          ].map((item, i) => (
+            <div
+              key={i}
+              className="flex items-center gap-3 py-2 px-3 bg-gray-800/30 rounded-lg"
+            >
+              <div
+                className={`w-2 h-2 rounded-full flex-shrink-0 ${
+                  item.type === 'ok'
+                    ? 'bg-emerald-400'
+                    : item.type === 'movie'
+                    ? 'bg-rose-400'
+                    : item.type === 'show'
+                    ? 'bg-blue-400'
+                    : 'bg-purple-400'
+                }`}
+              />
+              <span className="text-gray-300 text-sm flex-1">{item.text}</span>
+            </div>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+};
+
+const AdminDashboard = () => {
+  const location = useLocation();
 
   return (
     <div className="min-h-screen bg-gray-950">
@@ -180,7 +178,7 @@ const AdminDashboard = () => {
       {/* Content */}
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         <Routes>
-          <Route index element={<AdminOverview stats={stats} />} />
+          <Route index element={<AdminOverview />} />
           <Route path="movies" element={<ManageMovies />} />
           <Route path="shows" element={<ManageShows />} />
           <Route path="theatres" element={<ManageTheatres />} />

@@ -1,5 +1,5 @@
 // ═══ FILE: src/pages/BookingHistoryPage.jsx ═══
-// User's booking history — Jeyanth
+// User's booking history — connected to backend
 import { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { useSelector, useDispatch } from 'react-redux';
@@ -16,71 +16,6 @@ import {
   HiOutlineExclamation,
 } from 'react-icons/hi';
 import toast from 'react-hot-toast';
-
-// Mock bookings for demo
-const MOCK_BOOKINGS = [
-  {
-    id: 1,
-    status: 'CONFIRMED',
-    totalAmount: 660,
-    createdAt: '2026-03-28T14:22:00',
-    show: {
-      showTime: '2026-04-02T18:00:00',
-      movie: { id: 3, title: 'Interstellar', genre: 'Sci-Fi', language: 'English', durationMin: 169 },
-      screen: { screenName: 'IMAX', theatre: { name: 'INOX Megaplex', city: 'Chennai' } },
-    },
-    seats: [
-      { seatLabel: 'F8', type: 'STANDARD', price: 200 },
-      { seatLabel: 'F9', type: 'STANDARD', price: 200 },
-    ],
-    payment: { status: 'SUCCESS', method: 'upi' },
-  },
-  {
-    id: 2,
-    status: 'CONFIRMED',
-    totalAmount: 900,
-    createdAt: '2026-03-25T09:10:00',
-    show: {
-      showTime: '2026-03-30T21:30:00',
-      movie: { id: 2, title: 'The Dark Knight', genre: 'Action', language: 'English', durationMin: 152 },
-      screen: { screenName: 'Screen 1', theatre: { name: 'PVR Cinemas', city: 'Chennai' } },
-    },
-    seats: [
-      { seatLabel: 'A3', type: 'RECLINER', price: 450 },
-      { seatLabel: 'A4', type: 'RECLINER', price: 450 },
-    ],
-    payment: { status: 'SUCCESS', method: 'card' },
-  },
-  {
-    id: 3,
-    status: 'CANCELLED',
-    totalAmount: 300,
-    createdAt: '2026-03-20T16:45:00',
-    show: {
-      showTime: '2026-03-22T14:00:00',
-      movie: { id: 5, title: 'Dangal', genre: 'Drama', language: 'Hindi', durationMin: 161 },
-      screen: { screenName: 'Screen 2', theatre: { name: 'Cinepolis', city: 'Bangalore' } },
-    },
-    seats: [{ seatLabel: 'D5', type: 'PREMIUM', price: 300 }],
-    payment: { status: 'REFUNDED', method: 'upi' },
-  },
-  {
-    id: 4,
-    status: 'CONFIRMED',
-    totalAmount: 600,
-    createdAt: '2026-03-15T11:30:00',
-    show: {
-      showTime: '2026-03-18T10:00:00',
-      movie: { id: 7, title: 'Vikram', genre: 'Action', language: 'Tamil', durationMin: 174 },
-      screen: { screenName: 'Screen 3', theatre: { name: 'INOX Megaplex', city: 'Chennai' } },
-    },
-    seats: [
-      { seatLabel: 'C6', type: 'PREMIUM', price: 300 },
-      { seatLabel: 'C7', type: 'PREMIUM', price: 300 },
-    ],
-    payment: { status: 'SUCCESS', method: 'wallet' },
-  },
-];
 
 const STATUS_STYLES = {
   CONFIRMED: {
@@ -105,29 +40,14 @@ const STATUS_STYLES = {
 
 const BookingHistoryPage = () => {
   const dispatch = useDispatch();
-  const { bookings: apiBookings, loading } = useSelector((state) => state.booking);
+  const { bookings, loading } = useSelector((state) => state.booking);
   const { token } = useSelector((state) => state.auth);
-  const [bookings, setBookings] = useState([]);
   const [filter, setFilter] = useState('all');
   const [cancellingId, setCancellingId] = useState(null);
 
   useEffect(() => {
     if (token) {
-      dispatch(fetchMyBookings())
-        .unwrap()
-        .then((result) => {
-          const data = result.data || result || [];
-          if (Array.isArray(data) && data.length > 0) {
-            setBookings(data);
-          } else {
-            setBookings(MOCK_BOOKINGS);
-          }
-        })
-        .catch(() => {
-          setBookings(MOCK_BOOKINGS);
-        });
-    } else {
-      setBookings(MOCK_BOOKINGS);
+      dispatch(fetchMyBookings());
     }
   }, [dispatch, token]);
 
@@ -135,22 +55,10 @@ const BookingHistoryPage = () => {
     if (!window.confirm('Are you sure you want to cancel this booking?')) return;
     setCancellingId(bookingId);
     try {
-      if (token) {
-        await dispatch(cancelBooking(bookingId)).unwrap();
-      }
-      setBookings((prev) =>
-        prev.map((b) =>
-          b.id === bookingId ? { ...b, status: 'CANCELLED', payment: { ...b.payment, status: 'REFUNDED' } } : b
-        )
-      );
+      await dispatch(cancelBooking(bookingId)).unwrap();
       toast.success('Booking cancelled. Refund will be processed.');
-    } catch {
-      setBookings((prev) =>
-        prev.map((b) =>
-          b.id === bookingId ? { ...b, status: 'CANCELLED', payment: { ...b.payment, status: 'REFUNDED' } } : b
-        )
-      );
-      toast.success('Booking cancelled. Refund will be processed.');
+    } catch (err) {
+      toast.error(err || 'Failed to cancel booking');
     } finally {
       setCancellingId(null);
     }
@@ -192,7 +100,7 @@ const BookingHistoryPage = () => {
 
           {/* Filter tabs */}
           <div className="flex bg-gray-900/60 border border-gray-800/50 rounded-xl p-1">
-            {['all', 'confirmed', 'cancelled'].map((tab) => (
+            {['all', 'confirmed', 'pending', 'cancelled'].map((tab) => (
               <button
                 key={tab}
                 onClick={() => setFilter(tab)}
@@ -236,7 +144,7 @@ const BookingHistoryPage = () => {
             {filteredBookings.map((booking) => {
               const statusStyle = STATUS_STYLES[booking.status] || STATUS_STYLES.PENDING;
               const StatusIcon = statusStyle.icon;
-              const upcoming = isUpcoming(booking.show?.showTime);
+              const upcoming = isUpcoming(booking.showTime);
 
               return (
                 <div
@@ -263,14 +171,14 @@ const BookingHistoryPage = () => {
                           className="w-full h-full flex items-center justify-center"
                           style={{
                             background: `linear-gradient(135deg, hsl(${
-                              ((booking.show?.movie?.id || booking.id) * 47) % 360
+                              (booking.id * 47) % 360
                             }, 70%, 25%), hsl(${
-                              ((booking.show?.movie?.id || booking.id) * 47 + 60) % 360
+                              (booking.id * 47 + 60) % 360
                             }, 70%, 15%))`,
                           }}
                         >
                           <span className="text-2xl font-bold text-white/20">
-                            {booking.show?.movie?.title?.charAt(0) || 'M'}
+                            {booking.movieTitle?.charAt(0) || 'M'}
                           </span>
                         </div>
                       </div>
@@ -280,20 +188,8 @@ const BookingHistoryPage = () => {
                         <div className="flex items-start justify-between gap-3 mb-2">
                           <div>
                             <h3 className="text-white font-semibold text-base sm:text-lg truncate">
-                              {booking.show?.movie?.title || 'Movie'}
+                              {booking.movieTitle || 'Movie'}
                             </h3>
-                            <div className="flex flex-wrap items-center gap-2 mt-1">
-                              {booking.show?.movie?.language && (
-                                <span className="px-2 py-0.5 bg-purple-500/10 border border-purple-500/20 rounded-full text-purple-400 text-[10px] font-medium">
-                                  {booking.show.movie.language}
-                                </span>
-                              )}
-                              {booking.show?.movie?.genre && (
-                                <span className="px-2 py-0.5 bg-rose-500/10 border border-rose-500/20 rounded-full text-rose-400 text-[10px] font-medium">
-                                  {booking.show.movie.genre}
-                                </span>
-                              )}
-                            </div>
                           </div>
 
                           {/* Status badge */}
@@ -311,8 +207,8 @@ const BookingHistoryPage = () => {
                             <p className="text-gray-600 text-[10px] uppercase tracking-wider">Show Time</p>
                             <p className="text-gray-300 text-xs font-medium mt-0.5 flex items-center gap-1">
                               <HiOutlineClock className="w-3 h-3 text-gray-500" />
-                              {booking.show?.showTime
-                                ? formatShowTime(booking.show.showTime)
+                              {booking.showTime
+                                ? formatShowTime(booking.showTime)
                                 : 'N/A'}
                             </p>
                           </div>
@@ -320,13 +216,13 @@ const BookingHistoryPage = () => {
                             <p className="text-gray-600 text-[10px] uppercase tracking-wider">Theatre</p>
                             <p className="text-gray-300 text-xs font-medium mt-0.5 flex items-center gap-1">
                               <HiOutlineLocationMarker className="w-3 h-3 text-gray-500" />
-                              {booking.show?.screen?.theatre?.name || 'N/A'}
+                              {booking.theatreName || 'N/A'}
                             </p>
                           </div>
                           <div>
                             <p className="text-gray-600 text-[10px] uppercase tracking-wider">Seats</p>
                             <p className="text-gray-300 text-xs font-medium mt-0.5">
-                              {booking.seats?.map((s) => s.seatLabel).join(', ') || 'N/A'}
+                              {booking.seats?.map((s) => s.seatNumber).join(', ') || 'N/A'}
                             </p>
                           </div>
                           <div>
@@ -341,7 +237,7 @@ const BookingHistoryPage = () => {
                         <div className="flex items-center gap-3 mt-4 pt-3 border-t border-gray-800/30">
                           <span className="text-gray-600 text-[10px]">
                             <HiOutlineCalendar className="w-3 h-3 inline mr-1" />
-                            Booked {formatDate(booking.createdAt)}
+                            Booked {booking.bookedAt ? formatDate(booking.bookedAt) : ''}
                           </span>
                           <span className="text-gray-700">•</span>
                           <span className="text-gray-600 text-[10px]">
@@ -349,7 +245,15 @@ const BookingHistoryPage = () => {
                           </span>
 
                           <div className="ml-auto flex gap-2">
-                            {booking.status === 'CONFIRMED' && upcoming && (
+                            {booking.status === 'PENDING' && (
+                              <Link
+                                to={`/bookings/${booking.id}/confirm`}
+                                className="px-3 py-1.5 text-xs text-emerald-400 border border-emerald-500/20 rounded-lg hover:bg-emerald-500/10 transition-colors"
+                              >
+                                Pay Now
+                              </Link>
+                            )}
+                            {(booking.status === 'CONFIRMED' || booking.status === 'PENDING') && upcoming && (
                               <button
                                 onClick={() => handleCancel(booking.id)}
                                 disabled={cancellingId === booking.id}
@@ -361,7 +265,7 @@ const BookingHistoryPage = () => {
                             {booking.status === 'CANCELLED' && (
                               <span className="px-3 py-1.5 text-xs text-gray-500 bg-gray-800/30 rounded-lg flex items-center gap-1">
                                 <HiOutlineExclamation className="w-3 h-3" />
-                                {booking.payment?.status === 'REFUNDED' ? 'Refunded' : 'Cancelled'}
+                                Cancelled
                               </span>
                             )}
                           </div>

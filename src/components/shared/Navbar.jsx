@@ -15,13 +15,9 @@ const Navbar = () => {
   const [searchQuery, setSearchQuery] = useState('');
 
   const handleLogout = async () => {
-    try {
-      await dispatch(logoutUser()).unwrap();
-      toast.success('Logged out successfully');
-      navigate('/');
-    } catch {
-      toast.error('Logout failed');
-    }
+    await dispatch(logoutUser());
+    toast.success('Logged out successfully');
+    navigate('/');
   };
 
   const handleSearch = (e) => {

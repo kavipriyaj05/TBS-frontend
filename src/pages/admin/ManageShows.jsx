@@ -23,40 +23,13 @@ const MOCK_SHOWS = [
     showTime: '2026-04-01T14:00:00',
     price: 200,
     status: 'SCHEDULED',
-    movie: { id: 1, title: 'Inception' },
-    screen: { id: 1, screenName: 'Screen 2', theatre: { id: 1, name: 'PVR Cinemas', city: 'Chennai' } },
-  },
-  {
-    id: 2,
-    showTime: '2026-04-01T18:30:00',
-    price: 250,
-    status: 'SCHEDULED',
-    movie: { id: 2, title: 'The Dark Knight' },
-    screen: { id: 2, screenName: 'IMAX', theatre: { id: 2, name: 'INOX Megaplex', city: 'Chennai' } },
-  },
-  {
-    id: 3,
-    showTime: '2026-04-02T10:00:00',
-    price: 180,
-    status: 'SCHEDULED',
-    movie: { id: 3, title: 'Interstellar' },
-    screen: { id: 3, screenName: 'Screen 1', theatre: { id: 1, name: 'PVR Cinemas', city: 'Chennai' } },
-  },
-  {
-    id: 4,
-    showTime: '2026-03-28T21:00:00',
-    price: 200,
-    status: 'COMPLETED',
-    movie: { id: 7, title: 'Vikram' },
-    screen: { id: 4, screenName: 'Screen 3', theatre: { id: 2, name: 'INOX Megaplex', city: 'Chennai' } },
-  },
-  {
-    id: 5,
-    showTime: '2026-03-25T16:00:00',
-    price: 220,
-    status: 'CANCELLED',
-    movie: { id: 5, title: 'Dangal' },
-    screen: { id: 2, screenName: 'IMAX', theatre: { id: 2, name: 'INOX Megaplex', city: 'Chennai' } },
+    movieTitle: 'Inception',
+    movieId: 1,
+    theatreName: 'PVR Cinemas',
+    theatreCity: 'Chennai',
+    screenName: 'Screen 2',
+    screenId: 1,
+    theatreId: 1,
   },
 ];
 
@@ -111,40 +84,25 @@ const ManageShows = () => {
         movieApi.getAllMovies(),
         adminApi.getAllTheatres(),
       ]);
-      setMovies(moviesRes.data?.data || moviesRes.data || []);
-      setTheatres(theatresRes.data?.data || theatresRes.data || []);
+      const moviesData = moviesRes.data?.data || moviesRes.data || [];
+      const theatresData = theatresRes.data?.data || theatresRes.data || [];
+      setMovies(Array.isArray(moviesData) ? moviesData : []);
+      setTheatres(Array.isArray(theatresData) ? theatresData : []);
     } catch {
-      // Use mock data
-      setMovies([
-        { id: 1, title: 'Inception' },
-        { id: 2, title: 'The Dark Knight' },
-        { id: 3, title: 'Interstellar' },
-        { id: 5, title: 'Dangal' },
-        { id: 7, title: 'Vikram' },
-      ]);
-      setTheatres([
-        { id: 1, name: 'PVR Cinemas', city: 'Chennai' },
-        { id: 2, name: 'INOX Megaplex', city: 'Chennai' },
-      ]);
+      setMovies([]);
+      setTheatres([]);
     }
   };
 
-  const handleTheatreChange = async (theatreId) => {
+  // When a theatre is selected in the form, load its screens from the TheatreResponse.screens list
+  const handleTheatreChange = (theatreId) => {
     setSelectedTheatre(theatreId);
     if (!theatreId) {
       setScreens([]);
       return;
     }
-    try {
-      const res = await adminApi.getScreensByTheatre(theatreId);
-      setScreens(res.data?.data || res.data || []);
-    } catch {
-      setScreens([
-        { id: 1, screenName: 'Screen 1' },
-        { id: 2, screenName: 'IMAX' },
-        { id: 3, screenName: 'Screen 3' },
-      ]);
-    }
+    const theatre = theatres.find((t) => String(t.id) === String(theatreId));
+    setScreens(theatre?.screens || []);
   };
 
   const handleOpenAdd = () => {
@@ -159,14 +117,14 @@ const ManageShows = () => {
     setEditingShow(show);
     const datetime = show.showTime ? show.showTime.slice(0, 16) : '';
     setFormData({
-      movieId: show.movie?.id || '',
-      screenId: show.screen?.id || '',
+      movieId: show.movieId || '',
+      screenId: show.screenId || '',
       showTime: datetime,
       price: show.price || '',
     });
-    if (show.screen?.theatre?.id) {
-      setSelectedTheatre(show.screen.theatre.id);
-      handleTheatreChange(show.screen.theatre.id);
+    if (show.theatreId) {
+      setSelectedTheatre(show.theatreId);
+      handleTheatreChange(show.theatreId);
     }
     setShowModal(true);
   };
@@ -175,31 +133,41 @@ const ManageShows = () => {
     e.preventDefault();
     setSaving(true);
     try {
+      const payload = {
+        movieId: Number(formData.movieId),
+        screenId: Number(formData.screenId),
+        showTime: formData.showTime + ':00',
+        price: Number(formData.price),
+      };
       if (editingShow) {
-        try { await adminApi.updateShow(editingShow.id, formData); } catch {}
+        try {
+          await adminApi.updateShow(editingShow.id, payload);
+        } catch {}
         setShows((prev) =>
-          prev.map((s) => (s.id === editingShow.id ? { ...s, ...formData, showTime: formData.showTime + ':00' } : s))
+          prev.map((s) => (s.id === editingShow.id ? { ...s, ...payload } : s))
         );
         toast.success('Show updated successfully');
       } else {
         try {
-          const response = await adminApi.createShow(formData);
+          const response = await adminApi.createShow(payload);
           const newShow = response.data?.data || response.data;
           setShows((prev) => [newShow, ...prev]);
         } catch {
           const movie = movies.find((m) => m.id === Number(formData.movieId));
+          const theatre = theatres.find((t) => String(t.id) === String(selectedTheatre));
+          const screen = screens.find((s) => String(s.id) === String(formData.screenId));
           setShows((prev) => [
             {
-              ...formData,
               id: Date.now(),
               status: 'SCHEDULED',
-              movie: movie || { id: formData.movieId, title: 'New Movie' },
-              screen: {
-                id: formData.screenId,
-                screenName: screens.find((s) => s.id === Number(formData.screenId))?.screenName || 'Screen',
-                theatre: theatres.find((t) => t.id === Number(selectedTheatre)) || { name: 'Theatre' },
-              },
+              movieTitle: movie?.title || 'New Movie',
+              movieId: formData.movieId,
+              theatreName: theatre?.name || 'Theatre',
+              theatreCity: theatre?.city || '',
+              screenName: screen?.screenName || 'Screen',
+              screenId: formData.screenId,
               showTime: formData.showTime + ':00',
+              price: formData.price,
             },
             ...prev,
           ]);
@@ -214,15 +182,6 @@ const ManageShows = () => {
     }
   };
 
-  const handleCancel = async (id) => {
-    if (!window.confirm('Are you sure you want to cancel this show?')) return;
-    try { await adminApi.cancelShow(id); } catch {}
-    setShows((prev) =>
-      prev.map((s) => (s.id === id ? { ...s, status: 'CANCELLED' } : s))
-    );
-    toast.success('Show cancelled');
-  };
-
   const formatShowTime = (datetime) =>
     new Date(datetime).toLocaleString('en-US', {
       weekday: 'short',
@@ -233,10 +192,11 @@ const ManageShows = () => {
       hour12: true,
     });
 
+  // Adapted to flat ShowResponse
   const filtered = shows.filter((s) => {
     const matchesSearch =
-      s.movie?.title?.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      s.screen?.theatre?.name?.toLowerCase().includes(searchQuery.toLowerCase());
+      (s.movieTitle || '').toLowerCase().includes(searchQuery.toLowerCase()) ||
+      (s.theatreName || '').toLowerCase().includes(searchQuery.toLowerCase());
     const matchesStatus = statusFilter === 'all' || s.status === statusFilter;
     return matchesSearch && matchesStatus;
   });
@@ -323,7 +283,7 @@ const ManageShows = () => {
                       <div className="flex items-start justify-between gap-2 mb-3">
                         <h3 className="text-white font-semibold text-sm truncate flex items-center gap-2">
                           <HiOutlineFilm className="w-4 h-4 text-rose-400 flex-shrink-0" />
-                          {show.movie?.title || 'Movie'}
+                          {show.movieTitle || 'Movie'}
                         </h3>
                         <span
                           className={`px-2 py-0.5 ${style.bg} border ${style.border} rounded-full ${style.text} text-[10px] font-medium flex-shrink-0`}
@@ -339,7 +299,7 @@ const ManageShows = () => {
                         </p>
                         <p className="text-gray-400 text-xs flex items-center gap-1.5">
                           <HiOutlineLocationMarker className="w-3.5 h-3.5 text-gray-500" />
-                          {show.screen?.theatre?.name} — {show.screen?.screenName}
+                          {show.theatreName || 'Theatre'} — {show.screenName || 'Screen'}
                         </p>
                         <p className="text-gray-300 text-sm font-medium">₹{show.price}</p>
                       </div>
@@ -352,15 +312,6 @@ const ManageShows = () => {
                           <HiOutlinePencil className="w-3.5 h-3.5" />
                           Edit
                         </button>
-                        {show.status === 'SCHEDULED' && !isPast && (
-                          <button
-                            onClick={() => handleCancel(show.id)}
-                            className="flex-1 flex items-center justify-center gap-1 py-1.5 text-xs text-gray-400 hover:text-red-400 hover:bg-red-500/10 rounded-lg transition-colors cursor-pointer"
-                          >
-                            <HiOutlineBan className="w-3.5 h-3.5" />
-                            Cancel
-                          </button>
-                        )}
                       </div>
                     </div>
                   </div>

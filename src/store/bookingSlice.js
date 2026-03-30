@@ -1,8 +1,8 @@
 // ═══ FILE: src/store/bookingSlice.js ═══
-// Redux booking slice — Jeyanth
-// Manages booking state: selectedSeats, currentBooking, bookings list
+// Redux booking slice — manages booking + payment state
 import { createSlice, createAsyncThunk } from '@reduxjs/toolkit';
 import bookingApi from '../api/bookingApi';
+import paymentApi from '../api/paymentApi';
 
 export const createBooking = createAsyncThunk(
   'booking/create',
@@ -32,20 +32,6 @@ export const fetchMyBookings = createAsyncThunk(
   }
 );
 
-export const fetchBookingById = createAsyncThunk(
-  'booking/fetchById',
-  async (id, { rejectWithValue }) => {
-    try {
-      const response = await bookingApi.getBookingById(id);
-      return response.data;
-    } catch (error) {
-      return rejectWithValue(
-        error.response?.data?.message || 'Failed to fetch booking'
-      );
-    }
-  }
-);
-
 export const cancelBooking = createAsyncThunk(
   'booking/cancel',
   async (id, { rejectWithValue }) => {
@@ -60,15 +46,58 @@ export const cancelBooking = createAsyncThunk(
   }
 );
 
-export const confirmPayment = createAsyncThunk(
-  'booking/confirmPayment',
-  async ({ bookingId, paymentData }, { rejectWithValue }) => {
+export const confirmBooking = createAsyncThunk(
+  'booking/confirm',
+  async (id, { rejectWithValue }) => {
     try {
-      const response = await bookingApi.confirmPayment(bookingId, paymentData);
+      const response = await bookingApi.confirmBooking(id);
       return response.data;
     } catch (error) {
       return rejectWithValue(
-        error.response?.data?.message || 'Payment failed'
+        error.response?.data?.message || 'Confirmation failed'
+      );
+    }
+  }
+);
+
+// Payment thunks
+export const initiatePayment = createAsyncThunk(
+  'booking/initiatePayment',
+  async (bookingId, { rejectWithValue }) => {
+    try {
+      const response = await paymentApi.initiatePayment(bookingId);
+      return response.data;
+    } catch (error) {
+      return rejectWithValue(
+        error.response?.data?.message || 'Payment initiation failed'
+      );
+    }
+  }
+);
+
+export const simulateWebhook = createAsyncThunk(
+  'booking/simulateWebhook',
+  async ({ transactionId, status }, { rejectWithValue }) => {
+    try {
+      const response = await paymentApi.simulateWebhook(transactionId, status);
+      return response.data;
+    } catch (error) {
+      return rejectWithValue(
+        error.response?.data?.message || 'Payment processing failed'
+      );
+    }
+  }
+);
+
+export const fetchPaymentStatus = createAsyncThunk(
+  'booking/fetchPaymentStatus',
+  async (bookingId, { rejectWithValue }) => {
+    try {
+      const response = await paymentApi.getPaymentStatus(bookingId);
+      return response.data;
+    } catch (error) {
+      return rejectWithValue(
+        error.response?.data?.message || 'Failed to fetch payment status'
       );
     }
   }
@@ -78,6 +107,7 @@ const initialState = {
   selectedSeats: [],
   currentBooking: null,
   bookings: [],
+  currentPayment: null,
   loading: false,
   error: null,
 };
@@ -102,6 +132,7 @@ const bookingSlice = createSlice({
     },
     clearCurrentBooking: (state) => {
       state.currentBooking = null;
+      state.currentPayment = null;
     },
     clearBookingError: (state) => {
       state.error = null;
@@ -136,19 +167,6 @@ const bookingSlice = createSlice({
         state.loading = false;
         state.error = action.payload;
       })
-      // Fetch booking by ID
-      .addCase(fetchBookingById.pending, (state) => {
-        state.loading = true;
-        state.error = null;
-      })
-      .addCase(fetchBookingById.fulfilled, (state, action) => {
-        state.loading = false;
-        state.currentBooking = action.payload.data || action.payload;
-      })
-      .addCase(fetchBookingById.rejected, (state, action) => {
-        state.loading = false;
-        state.error = action.payload;
-      })
       // Cancel booking
       .addCase(cancelBooking.fulfilled, (state, action) => {
         const cancelled = action.payload.data || action.payload;
@@ -160,18 +178,44 @@ const bookingSlice = createSlice({
           state.currentBooking = cancelled;
         }
       })
-      // Confirm payment
-      .addCase(confirmPayment.pending, (state) => {
+      // Confirm booking
+      .addCase(confirmBooking.fulfilled, (state, action) => {
+        const confirmed = action.payload.data || action.payload;
+        state.currentBooking = confirmed;
+        const index = state.bookings.findIndex((b) => b.id === confirmed.id);
+        if (index >= 0) {
+          state.bookings[index] = confirmed;
+        }
+      })
+      // Initiate payment
+      .addCase(initiatePayment.pending, (state) => {
         state.loading = true;
         state.error = null;
       })
-      .addCase(confirmPayment.fulfilled, (state, action) => {
+      .addCase(initiatePayment.fulfilled, (state, action) => {
         state.loading = false;
-        state.currentBooking = action.payload.data || action.payload;
+        state.currentPayment = action.payload.data || action.payload;
       })
-      .addCase(confirmPayment.rejected, (state, action) => {
+      .addCase(initiatePayment.rejected, (state, action) => {
         state.loading = false;
         state.error = action.payload;
+      })
+      // Simulate webhook (payment completion)
+      .addCase(simulateWebhook.pending, (state) => {
+        state.loading = true;
+        state.error = null;
+      })
+      .addCase(simulateWebhook.fulfilled, (state, action) => {
+        state.loading = false;
+        state.currentPayment = action.payload.data || action.payload;
+      })
+      .addCase(simulateWebhook.rejected, (state, action) => {
+        state.loading = false;
+        state.error = action.payload;
+      })
+      // Fetch payment status
+      .addCase(fetchPaymentStatus.fulfilled, (state, action) => {
+        state.currentPayment = action.payload.data || action.payload;
       });
   },
 });

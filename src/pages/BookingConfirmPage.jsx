@@ -1,9 +1,10 @@
 // ═══ FILE: src/pages/BookingConfirmPage.jsx ═══
-// Booking confirmation & payment page — Jeyanth
+// Booking confirmation & payment page — connected to backend payment API
 import { useState, useEffect } from 'react';
-import { useParams, useLocation, useNavigate, Link } from 'react-router-dom';
+import { useParams, useNavigate, Link } from 'react-router-dom';
 import { useSelector, useDispatch } from 'react-redux';
-import { fetchBookingById, confirmPayment } from '../store/bookingSlice';
+import { initiatePayment, simulateWebhook, confirmBooking } from '../store/bookingSlice';
+import axiosInstance from '../api/axiosInstance';
 import LoadingSpinner from '../components/shared/LoadingSpinner';
 import {
   HiOutlineTicket,
@@ -18,47 +19,65 @@ import toast from 'react-hot-toast';
 
 const BookingConfirmPage = () => {
   const { id } = useParams();
-  const location = useLocation();
   const navigate = useNavigate();
   const dispatch = useDispatch();
-  const { currentBooking, loading } = useSelector((state) => state.booking);
+  const { currentBooking, currentPayment, loading } = useSelector((state) => state.booking);
   const { token } = useSelector((state) => state.auth);
 
   const [paymentMethod, setPaymentMethod] = useState('upi');
   const [isProcessing, setIsProcessing] = useState(false);
   const [isConfirmed, setIsConfirmed] = useState(false);
+  const [booking, setBooking] = useState(null);
+  const [fetchLoading, setFetchLoading] = useState(true);
 
-  // Use mock booking from navigation state, or fetch from API
-  const mockBooking = location.state?.mockBooking;
-  const booking = currentBooking || mockBooking;
-
+  // Fetch booking details from API
   useEffect(() => {
-    if (!mockBooking && token && id !== 'mock-1') {
-      dispatch(fetchBookingById(id));
-    }
-  }, [id, dispatch, token, mockBooking]);
+    const fetchBooking = async () => {
+      setFetchLoading(true);
+      try {
+        // Use currentBooking from Redux if available (just came from seat selection)
+        if (currentBooking && String(currentBooking.id) === String(id)) {
+          setBooking(currentBooking);
+        } else {
+          // Fetch from my bookings and find the one we need
+          const response = await axiosInstance.get('/bookings/my');
+          const bookings = response.data?.data || response.data || [];
+          const found = bookings.find((b) => String(b.id) === String(id));
+          if (found) {
+            setBooking(found);
+          }
+        }
+      } catch (err) {
+        toast.error('Failed to load booking details');
+      } finally {
+        setFetchLoading(false);
+      }
+    };
+    if (token) fetchBooking();
+    else setFetchLoading(false);
+  }, [id, token, currentBooking]);
 
   const handlePayment = async () => {
+    if (!booking) return;
     setIsProcessing(true);
 
-    // Simulate payment processing
-    await new Promise((resolve) => setTimeout(resolve, 2000));
-
     try {
-      if (token && id !== 'mock-1') {
-        await dispatch(
-          confirmPayment({
-            bookingId: id,
-            paymentData: { method: paymentMethod },
-          })
-        ).unwrap();
-      }
+      // Step 1: Initiate payment
+      const paymentResult = await dispatch(initiatePayment(booking.id)).unwrap();
+      const paymentData = paymentResult.data || paymentResult;
+      const transactionId = paymentData.transactionId;
+
+      // Step 2: Simulate payment gateway webhook (SUCCESS)
+      // NOTE: The backend's processWebhook() already calls confirmBooking() internally
+      // when status is SUCCESS, so we do NOT call confirmBooking again.
+      await dispatch(
+        simulateWebhook({ transactionId, status: 'SUCCESS' })
+      ).unwrap();
+
       setIsConfirmed(true);
       toast.success('Payment successful! Booking confirmed 🎉');
-    } catch {
-      // Demo mode — still show success
-      setIsConfirmed(true);
-      toast.success('Payment successful! Booking confirmed 🎉');
+    } catch (err) {
+      toast.error(err || 'Payment failed. Please try again.');
     } finally {
       setIsProcessing(false);
     }
@@ -74,7 +93,7 @@ const BookingConfirmPage = () => {
       hour12: true,
     });
 
-  if (loading) return <LoadingSpinner text="Loading booking..." fullScreen />;
+  if (fetchLoading) return <LoadingSpinner text="Loading booking..." fullScreen />;
 
   // ── Success state ──
   if (isConfirmed) {
@@ -108,12 +127,8 @@ const BookingConfirmPage = () => {
                 </div>
                 <div className="text-left">
                   <h3 className="text-white font-semibold">
-                    {booking?.show?.movie?.title || booking?.movie?.title || 'Movie Title'}
+                    {booking?.movieTitle || 'Movie'}
                   </h3>
-                  <p className="text-gray-500 text-xs">
-                    {booking?.show?.movie?.language || booking?.movie?.language || ''} •{' '}
-                    {booking?.show?.movie?.genre || booking?.movie?.genre || ''}
-                  </p>
                 </div>
               </div>
 
@@ -121,26 +136,19 @@ const BookingConfirmPage = () => {
                 <div className="bg-gray-800/40 rounded-lg p-3">
                   <p className="text-gray-500 text-xs mb-0.5">Date & Time</p>
                   <p className="text-gray-200 text-sm font-medium">
-                    {booking?.show?.showTime
-                      ? formatShowTime(booking.show.showTime)
-                      : booking?.showTime
-                      ? formatShowTime(booking.showTime)
-                      : 'TBD'}
+                    {booking?.showTime ? formatShowTime(booking.showTime) : 'TBD'}
                   </p>
                 </div>
                 <div className="bg-gray-800/40 rounded-lg p-3">
                   <p className="text-gray-500 text-xs mb-0.5">Theatre</p>
                   <p className="text-gray-200 text-sm font-medium">
-                    {booking?.show?.screen?.theatre?.name ||
-                      booking?.screen?.theatre?.name ||
-                      'PVR Cinemas'}
+                    {booking?.theatreName || 'Theatre'}
                   </p>
                 </div>
                 <div className="bg-gray-800/40 rounded-lg p-3">
                   <p className="text-gray-500 text-xs mb-0.5">Seats</p>
                   <p className="text-gray-200 text-sm font-medium">
-                    {booking?.seats?.map((s) => s.seatLabel || `${s.row}${s.seatNumber}`).join(', ') ||
-                      'N/A'}
+                    {booking?.seats?.map((s) => s.seatNumber).join(', ') || 'N/A'}
                   </p>
                 </div>
                 <div className="bg-gray-800/40 rounded-lg p-3">
@@ -163,7 +171,7 @@ const BookingConfirmPage = () => {
               <div className="flex items-center justify-between">
                 <span className="text-gray-400 text-sm">Amount Paid</span>
                 <span className="text-xl font-bold bg-gradient-to-r from-emerald-400 to-teal-400 bg-clip-text text-transparent">
-                  ₹{booking?.totalPrice || booking?.totalAmount || 0}
+                  ₹{booking?.totalAmount || 0}
                 </span>
               </div>
             </div>
@@ -207,8 +215,7 @@ const BookingConfirmPage = () => {
     );
   }
 
-  const totalAmount = booking.totalPrice || booking.totalAmount ||
-    (booking.seats?.reduce((sum, s) => sum + (s.price || 0), 0) || 0);
+  const totalAmount = Number(booking.totalAmount) || 0;
   const convenienceFee = (booking.seats?.length || 1) * 30;
   const grandTotal = totalAmount + convenienceFee;
 
@@ -217,7 +224,7 @@ const BookingConfirmPage = () => {
     <div className="min-h-screen bg-gray-950">
       <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         <Link
-          to={`/shows/${booking.show?.id || 1}/seats`}
+          to={`/shows/${booking.showId || 1}/seats`}
           className="inline-flex items-center gap-2 text-gray-400 hover:text-white text-sm mb-6 transition-colors group"
         >
           <HiOutlineClock className="w-4 h-4 group-hover:-translate-x-1 transition-transform" />
@@ -293,20 +300,14 @@ const BookingConfirmPage = () => {
                 </div>
                 <div>
                   <h3 className="text-white font-medium text-sm">
-                    {booking.show?.movie?.title || booking.movie?.title || 'Movie'}
+                    {booking.movieTitle || 'Movie'}
                   </h3>
                   <p className="text-gray-500 text-xs mt-0.5">
-                    {booking.show?.showTime
-                      ? formatShowTime(booking.show.showTime)
-                      : booking.showTime
-                      ? formatShowTime(booking.showTime)
-                      : ''}
+                    {booking.showTime ? formatShowTime(booking.showTime) : ''}
                   </p>
                   <p className="text-gray-500 text-xs">
                     <HiOutlineLocationMarker className="w-3 h-3 inline mr-0.5" />
-                    {booking.show?.screen?.theatre?.name ||
-                      booking.screen?.theatre?.name ||
-                      'Theatre'}
+                    {booking.theatreName || 'Theatre'} — {booking.screenName || ''}
                   </p>
                 </div>
               </div>
@@ -314,7 +315,7 @@ const BookingConfirmPage = () => {
               {/* Seats */}
               <div className="mb-4">
                 <p className="text-gray-400 text-xs mb-2">
-                  Seats ({booking.seats?.length || 1})
+                  Seats ({booking.seats?.length || 0})
                 </p>
                 <div className="flex flex-wrap gap-1.5">
                   {booking.seats?.map((s, i) => (
@@ -322,7 +323,7 @@ const BookingConfirmPage = () => {
                       key={i}
                       className="px-2 py-1 bg-gray-800/60 border border-gray-700/50 rounded text-gray-300 text-xs font-medium"
                     >
-                      {s.seatLabel || `${s.row}${s.seatNumber}`}
+                      {s.seatNumber}
                     </span>
                   )) || (
                     <span className="text-gray-500 text-xs">N/A</span>

@@ -1,9 +1,9 @@
 // ═══ FILE: src/pages/MovieDetailPage.jsx ═══
-// Movie detail page with show listings — Kavi
+// Movie detail page with show listings — connected to backend
 import { useState, useEffect } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import movieApi from '../api/movieApi';
-import axiosInstance from '../api/axiosInstance';
+import showApi from '../api/showApi';
 import LoadingSpinner from '../components/shared/LoadingSpinner';
 import {
   HiOutlineClock,
@@ -15,28 +15,7 @@ import {
   HiOutlineLocationMarker,
 } from 'react-icons/hi';
 import toast from 'react-hot-toast';
-
-// Mock data for demo
-const MOCK_MOVIES = {
-  1: { id: 1, title: 'Inception', genre: 'Sci-Fi', language: 'English', durationMin: 148, posterUrl: '', description: 'A thief who steals corporate secrets through the use of dream-sharing technology is given the inverse task of planting an idea into the mind of a C.E.O., but his tragic past may doom the project and his team to disaster.', releaseDate: '2025-07-16', isActive: true },
-  2: { id: 2, title: 'The Dark Knight', genre: 'Action', language: 'English', durationMin: 152, posterUrl: '', description: 'When the menace known as the Joker wreaks havoc and chaos on the people of Gotham, Batman must accept one of the greatest psychological and physical tests of his ability to fight injustice.', releaseDate: '2025-07-18', isActive: true },
-  3: { id: 3, title: 'Interstellar', genre: 'Sci-Fi', language: 'English', durationMin: 169, posterUrl: '', description: 'When Earth becomes uninhabitable in the future, a farmer and ex-NASA pilot, Joseph Cooper, is tasked to pilot a spacecraft, along with a team of researchers, to find a new planet for humans.', releaseDate: '2025-11-07', isActive: true },
-  4: { id: 4, title: 'Parasite', genre: 'Thriller', language: 'Hindi', durationMin: 132, posterUrl: '', description: 'Greed and class discrimination threaten the newly formed symbiotic relationship between the wealthy Park family and the destitute Kim clan.', releaseDate: '2025-05-30', isActive: true },
-  5: { id: 5, title: 'Dangal', genre: 'Drama', language: 'Hindi', durationMin: 161, posterUrl: '', description: 'Former wrestler Mahavir Singh Phogat and his two wrestler daughters struggle towards glory at the Commonwealth Games in the face of societal oppression.', releaseDate: '2025-12-23', isActive: true },
-  6: { id: 6, title: 'Bahubali', genre: 'Action', language: 'Telugu', durationMin: 159, posterUrl: '', description: 'In the kingdom of Mahishmati, Shivudu begins to search for his true identity after he learns of his connection to the kingdom.', releaseDate: '2025-07-10', isActive: true },
-  7: { id: 7, title: 'Vikram', genre: 'Action', language: 'Tamil', durationMin: 174, posterUrl: '', description: 'A special agent investigates a series of brutal murders that go deep into a criminal underworld network.', releaseDate: '2025-06-03', isActive: true },
-  8: { id: 8, title: 'KGF Chapter 2', genre: 'Action', language: 'Kannada', durationMin: 168, posterUrl: '', description: 'In the blood-soaked Kolar Gold Fields, Rocky\'s name strikes fear into his foes as his allies look up to him.', releaseDate: '2025-04-14', isActive: true },
-  9: { id: 9, title: 'Dune: Part Two', genre: 'Sci-Fi', language: 'English', durationMin: 166, posterUrl: '', description: 'Paul Atreides unites with the Fremen while on a warpath of revenge against the conspirators who destroyed his family.', releaseDate: '2025-03-01', isActive: true },
-  10: { id: 10, title: 'RRR', genre: 'Action', language: 'Telugu', durationMin: 187, posterUrl: '', description: 'A fictitious story about two Indian revolutionaries, Alluri Sitarama Raju and Komaram Bheem, who fought against the British Raj.', releaseDate: '2025-03-25', isActive: true },
-};
-
-const MOCK_SHOWS = [
-  { id: 1, showTime: '2026-04-01T10:00:00', price: 150.0, status: 'SCHEDULED', screen: { id: 1, screenName: 'Screen 1', theatre: { id: 1, name: 'PVR Cinemas', city: 'Chennai' } } },
-  { id: 2, showTime: '2026-04-01T14:00:00', price: 200.0, status: 'SCHEDULED', screen: { id: 2, screenName: 'Screen 2', theatre: { id: 1, name: 'PVR Cinemas', city: 'Chennai' } } },
-  { id: 3, showTime: '2026-04-01T18:00:00', price: 250.0, status: 'SCHEDULED', screen: { id: 3, screenName: 'IMAX', theatre: { id: 2, name: 'INOX Megaplex', city: 'Chennai' } } },
-  { id: 4, showTime: '2026-04-01T21:30:00', price: 300.0, status: 'SCHEDULED', screen: { id: 1, screenName: 'Screen 1', theatre: { id: 3, name: 'Cinepolis', city: 'Bangalore' } } },
-  { id: 5, showTime: '2026-04-02T11:00:00', price: 180.0, status: 'SCHEDULED', screen: { id: 2, screenName: 'Screen 3', theatre: { id: 2, name: 'INOX Megaplex', city: 'Chennai' } } },
-];
+import { getMoviePoster } from '../utils/moviePosters';
 
 const MovieDetailPage = () => {
   const { id } = useParams();
@@ -49,22 +28,14 @@ const MovieDetailPage = () => {
     const fetchMovie = async () => {
       setLoading(true);
       try {
-        let movieData;
-        try {
-          const response = await movieApi.getMovieById(id);
-          movieData = response.data?.data || response.data;
-        } catch {
-          movieData = MOCK_MOVIES[id] || null;
-        }
+        // Fetch movie details
+        const response = await movieApi.getMovieById(id);
+        const movieData = response.data?.data || response.data;
         setMovie(movieData);
 
         // Fetch shows for this movie
-        try {
-          const showResponse = await axiosInstance.get(`/shows?movieId=${id}`);
-          setShows(showResponse.data?.data || showResponse.data || []);
-        } catch {
-          setShows(MOCK_SHOWS);
-        }
+        const showResponse = await showApi.getShowsByMovie(id);
+        setShows(showResponse.data?.data || showResponse.data || []);
       } catch (err) {
         toast.error('Failed to load movie details');
       } finally {
@@ -103,12 +74,20 @@ const MovieDetailPage = () => {
     });
   };
 
-  // Group shows by theatre
-  const groupedShows = shows.reduce((acc, show) => {
-    const theatreKey = show.screen?.theatre?.name || 'Unknown Theatre';
+  // Group shows by theatre — adapted to flat ShowResponse
+  // ShowResponse has: theatreName, theatreCity, screenName (flat, not nested)
+  const filteredShows = selectedDate
+    ? shows.filter((show) => {
+        const showDate = show.showTime?.split('T')[0];
+        return showDate === selectedDate;
+      })
+    : shows;
+
+  const groupedShows = filteredShows.reduce((acc, show) => {
+    const theatreKey = show.theatreName || 'Unknown Theatre';
     if (!acc[theatreKey]) {
       acc[theatreKey] = {
-        theatre: show.screen?.theatre,
+        theatre: { name: show.theatreName, city: show.theatreCity },
         shows: [],
       };
     }
@@ -163,9 +142,9 @@ const MovieDetailPage = () => {
             {/* Poster */}
             <div className="w-48 md:w-64 flex-shrink-0">
               <div className="aspect-[2/3] rounded-xl overflow-hidden shadow-2xl shadow-rose-500/10 border border-gray-800/50">
-                {movie.posterUrl ? (
+                {getMoviePoster(movie) ? (
                   <img
-                    src={movie.posterUrl}
+                    src={getMoviePoster(movie)}
                     alt={movie.title}
                     className="w-full h-full object-cover"
                   />
@@ -257,7 +236,7 @@ const MovieDetailPage = () => {
             return (
               <button
                 key={dateStr}
-                onClick={() => setSelectedDate(dateStr)}
+                onClick={() => setSelectedDate(isSelected ? '' : dateStr)}
                 className={`flex-shrink-0 flex flex-col items-center px-4 py-3 rounded-xl border transition-all cursor-pointer min-w-[72px] ${
                   isSelected
                     ? 'bg-rose-500/20 border-rose-500/50 text-rose-400'
@@ -279,7 +258,7 @@ const MovieDetailPage = () => {
               <HiOutlineFilm className="w-12 h-12 text-gray-700 mx-auto mb-3" />
               <p className="text-gray-400 font-medium">No shows available</p>
               <p className="text-gray-600 text-sm mt-1">
-                Select a different date or check back later.
+                {selectedDate ? 'Select a different date or check back later.' : 'No shows are currently scheduled for this movie.'}
               </p>
             </div>
           ) : (
@@ -309,7 +288,7 @@ const MovieDetailPage = () => {
                         {formatShowTime(show.showTime)}
                       </span>
                       <span className="block text-gray-500 text-xs mt-0.5">
-                        ₹{show.price?.toFixed(0)} • {show.screen?.screenName}
+                        ₹{Number(show.price)?.toFixed(0)} • {show.screenName}
                       </span>
                     </Link>
                   ))}

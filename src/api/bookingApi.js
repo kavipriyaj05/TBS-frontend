@@ -1,14 +1,13 @@
 // ═══ FILE: src/api/bookingApi.js ═══
-// Booking API calls — Jeyanth
+// Booking API calls — aligned with backend BookingController
 import axiosInstance from './axiosInstance';
 
 export const bookingApi = {
   createBooking: (bookingData) => axiosInstance.post('/bookings', bookingData),
   getMyBookings: () => axiosInstance.get('/bookings/my'),
-  getBookingById: (id) => axiosInstance.get(`/bookings/${id}`),
-  cancelBooking: (id) => axiosInstance.put(`/bookings/${id}/cancel`),
-  confirmPayment: (bookingId, paymentData) =>
-    axiosInstance.post(`/bookings/${bookingId}/pay`, paymentData),
+  confirmBooking: (id) => axiosInstance.post(`/bookings/${id}/confirm`),
+  cancelBooking: (id) => axiosInstance.post(`/bookings/${id}/cancel`),
+  getAllBookings: () => axiosInstance.get('/bookings/admin/all'),
 };
 
 export default bookingApi;
